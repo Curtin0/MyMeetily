@@ -1,0 +1,36 @@
+# Build
+mymeetily
+mymeetily.exe
+dist/
+
+# Models (downloaded by user or auto-downloaded)
+llmmodels/whisper/*.bin
+llmmodels/ollama/
+llmmodels/summary/
+
+# Local whisper.cpp engine files downloaded by init-engine
+llmengine/whispercpp/Release/
+
+# Runtime cache
+.ollama-runtime/
+
+# Output
+output/
+testdata/*.wav
+testdata/*.mp3
+testdata/*.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db

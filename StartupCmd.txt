@@ -1,0 +1,22 @@
+  # 首次部署清单
+
+  # 1) 手动下载安装并启动 Ollama：
+  #    https://ollama.com/download/windows
+
+  # 2) 手动下载 whisper.cpp 引擎 zip 包（放 zip 即可，不需手动解压）：
+  #    文件名：whisper-cublas-12.4.0-bin-x64.zip
+  #    sha256：ff50101f85a6026d39053771c25b42f5752ac05d5be9ee2e5d2632541adef231
+  #    URL：https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.5/whisper-cublas-12.4.0-bin-x64.zip
+  #    放到：llmengine/whispercpp/Release/
+
+  # 3) 运行指令下载项目源码依赖：
+  #    go mod download
+
+  # 4) 运行指令模型引擎初始化：
+  #    go run . init-engine
+ 
+  # 5) 运行指令模型初始化
+  #    go run . init-model
+
+  # 6) 运行指令启动程序：
+  #    go run .

@@ -1,0 +1,18 @@
+asr:
+  whisper_binary: "llmengine/whispercpp/Release/whisper-cli"
+  model_path: "./llmmodels/whisper/ggml-large-v3-turbo-q5_0.bin"
+  language: "zh"
+
+ollama:
+  endpoint: "http://127.0.0.1:11434"
+  model: "qwen2.5:1.5b-instruct"
+  temperature: 0.3
+  max_tokens: 4096
+
+audio:
+  backend: "wasapi"
+  sample_rate: 16000
+  channels: 1
+
+output:
+  output_dir: "./output"
