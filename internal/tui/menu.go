@@ -7,18 +7,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// MenuModel is the main menu screen.
 type MenuModel struct {
-	options  []string
-	cursor   int
-	selected bool
+	options        []string
+	cursor         int
+	selected       bool
+	summaryEnabled bool
 }
 
-func NewMenuModel() MenuModel {
+func NewMenuModel(summaryEnabled bool) MenuModel {
 	return MenuModel{
+		summaryEnabled: summaryEnabled,
 		options: []string{
-			"🎤  实时录音",
-			"🚪  退出",
+			"实时录音",
+			"退出",
 		},
 		cursor: 0,
 	}
@@ -64,15 +65,23 @@ func (m MenuModel) View() string {
 	b.WriteString("\n\n")
 
 	for i, opt := range m.options {
+		prefix := "  "
 		if i == m.cursor {
-			b.WriteString(ActiveItemStyle.Render("▸ " + opt))
+			prefix = "▶ "
+			b.WriteString(ActiveItemStyle.Render(prefix + opt))
 		} else {
-			b.WriteString(InactiveItemStyle.Render("  " + opt))
+			b.WriteString(InactiveItemStyle.Render(prefix + opt))
 		}
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
+	if m.summaryEnabled {
+		b.WriteString(lipgloss.NewStyle().Foreground(Success).Render("当前模式：自动总结已启用"))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(Warning).Render("当前模式：仅转写，不生成自动总结"))
+	}
+	b.WriteString("\n\n")
 	b.WriteString(RenderHelp(
 		"↑/↓", "移动",
 		"Enter", "选择",

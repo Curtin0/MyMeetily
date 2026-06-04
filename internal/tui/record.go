@@ -13,31 +13,31 @@ import (
 	"github.com/mymeetily/mymeetily/internal/config"
 )
 
-// RecordModel is the live recording TUI screen.
 type RecordModel struct {
-	mic        audio.Recorder
-	outputDir  string
-	elapsed    time.Duration
-	running    bool
-	stopping   bool
-	outputPath string
-	peakLevel  float32 // current mic volume (0.0–1.0)
+	mic            audio.Recorder
+	outputDir      string
+	summaryEnabled bool
+	elapsed        time.Duration
+	running        bool
+	stopping       bool
+	outputPath     string
+	peakLevel      float32
 
-	// Real-time subtitles.
 	transcriber *audio.LiveTranscriber
-	transcript  []string // accumulated transcribed sentences (newest last)
+	transcript  []string
 }
 
-func NewRecordModel(outputDir string) RecordModel {
+func NewRecordModel(outputDir string, summaryEnabled bool) RecordModel {
 	return RecordModel{
-		outputDir: outputDir,
+		outputDir:      outputDir,
+		summaryEnabled: summaryEnabled,
 	}
 }
 
 type tickMsg time.Time
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -59,8 +59,6 @@ type recordFailedMsg struct {
 	err        error
 }
 
-// StartRecording begins WASAPI capture (mic + optional system audio loopback).
-// lt is the LiveTranscriber for real-time subtitles; may be nil.
 func StartRecording(cfg *config.Config, micDevice, speakerDevice string, lt *audio.LiveTranscriber) tea.Cmd {
 	return func() tea.Msg {
 		outputPath := audio.BuildRecordingPath(cfg.Output.OutputDir, time.Now())
@@ -109,7 +107,6 @@ func (m *Model) updateRecord(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.record.elapsed = m.record.mic.Elapsed()
 			m.record.peakLevel = m.record.mic.PeakLevel()
 		}
-		// Drain any new transcription results.
 		if m.record.transcriber != nil {
 			m.record.drainTranscript()
 		}
@@ -122,7 +119,6 @@ func (m *Model) updateRecord(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.record.running = false
 		m.record.stopping = false
 		m.record.outputPath = msg.outputPath
-		// Drain any remaining transcript.
 		if m.record.transcriber != nil {
 			m.record.transcriber.Close()
 			m.record.drainTranscript()
@@ -149,7 +145,7 @@ func (m *Model) updateRecord(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "esc":
 			if m.record.running && m.record.mic != nil {
-				m.record.mic.Stop()
+				_ = m.record.mic.Stop()
 			}
 			if m.record.transcriber != nil {
 				m.record.transcriber.Close()
@@ -163,7 +159,6 @@ func (m *Model) updateRecord(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// drainTranscript reads all pending results from the transcriber without blocking.
 func (m *RecordModel) drainTranscript() {
 	for {
 		select {
@@ -175,7 +170,6 @@ func (m *RecordModel) drainTranscript() {
 				continue
 			}
 			m.transcript = append(m.transcript, text)
-			// Keep only the last 20 sentences to limit memory.
 			if len(m.transcript) > 20 {
 				m.transcript = m.transcript[len(m.transcript)-20:]
 			}
@@ -190,50 +184,41 @@ func (m RecordModel) View() string {
 
 	b.WriteString(RenderTitle())
 	b.WriteString("\n")
-	b.WriteString(SubtitleStyle.Render("🎤 实时录音"))
+	b.WriteString(SubtitleStyle.Render("实时录音"))
 	b.WriteString("\n\n")
 
-	timerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(BrightText).
-		MarginBottom(1)
-
-	elapsed := m.elapsed
-	if !m.running && elapsed == 0 {
-		elapsed = 0
-	}
-
-	h := int(elapsed.Hours())
-	min := int(elapsed.Minutes()) % 60
-	sec := int(elapsed.Seconds()) % 60
-	timerText := fmt.Sprintf("⏱  %02d:%02d:%02d", h, min, sec)
-	b.WriteString(timerStyle.Render(timerText))
+	timerText := fmt.Sprintf("  %02d:%02d:%02d",
+		int(m.elapsed.Hours()),
+		int(m.elapsed.Minutes())%60,
+		int(m.elapsed.Seconds())%60,
+	)
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(BrightText).MarginBottom(1).Render(timerText))
 	b.WriteString("\n")
 
-	if m.stopping {
-		b.WriteString(lipgloss.NewStyle().Foreground(Warning).Render("⏳ 正在保存录音..."))
-	} else if m.running {
+	if !m.summaryEnabled {
+		b.WriteString(lipgloss.NewStyle().Foreground(Warning).Render("当前为纯转写模式：录音结束后将直接输出原文报告，不生成自动总结。"))
+		b.WriteString("\n\n")
+	}
+
+	switch {
+	case m.stopping:
+		b.WriteString(lipgloss.NewStyle().Foreground(Warning).Render("正在保存录音..."))
+	case m.running:
 		dot := lipgloss.NewStyle().Foreground(Error).Blink(true).Render("●")
 		b.WriteString(dot + " " + lipgloss.NewStyle().Foreground(Error).Render("录制中"))
 		b.WriteString("\n\n")
-		bar := generateAudioBar(m.peakLevel)
-		b.WriteString(lipgloss.NewStyle().Foreground(Primary).Render(bar))
+		b.WriteString(lipgloss.NewStyle().Foreground(Primary).Render(generateAudioBar(m.peakLevel)))
 		b.WriteString("\n")
-		pct := int(m.peakLevel * 100)
-		b.WriteString(lipgloss.NewStyle().Foreground(DimText).Render(
-			fmt.Sprintf("音量: %d%%", pct),
-		))
-	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(DimText).Render(fmt.Sprintf("音量: %d%%", int(m.peakLevel*100))))
+	default:
 		b.WriteString(lipgloss.NewStyle().Foreground(DimText).Render("准备开始录音..."))
 	}
 
 	b.WriteString("\n\n")
-
-	// Live transcription display.
 	if m.running && m.transcriber != nil {
 		b.WriteString(lipgloss.NewStyle().Foreground(DimText).Render("──────────────────────────────"))
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(Secondary).Bold(true).Render("📝 实时字幕"))
+		b.WriteString(lipgloss.NewStyle().Foreground(Secondary).Bold(true).Render("实时字幕"))
 		b.WriteString("\n")
 
 		if len(m.transcript) > 0 {
@@ -247,13 +232,11 @@ func (m RecordModel) View() string {
 				b.WriteString("\n")
 			}
 			b.WriteString("  ")
-			b.WriteString(lipgloss.NewStyle().Foreground(DimText).Blink(true).Render("…"))
+			b.WriteString(lipgloss.NewStyle().Foreground(DimText).Blink(true).Render("..."))
 		} else {
-			// Show VAD status for debugging.
 			d := m.transcriber.Diag.Snapshot()
-			rmsBar := generateMiniBar(d.LastRMS)
 			b.WriteString(fmt.Sprintf("  %s 音频:%d 语音:%d 静音:%d | 句子:%d whisper:运行%d 成功%d 空%d 失败%d",
-				rmsBar, d.AudioPackets, d.VoiceFrames, d.SilentFrames,
+				generateMiniBar(d.LastRMS), d.AudioPackets, d.VoiceFrames, d.SilentFrames,
 				d.SentencesCut, d.WhisperRunning, d.WhisperOK, d.WhisperEmpty, d.WhisperErr))
 			if d.LastResult != "" {
 				b.WriteString("\n  上次结果: ")
@@ -265,7 +248,7 @@ func (m RecordModel) View() string {
 
 	if m.running {
 		b.WriteString(RenderHelp(
-			"Enter/Space", "结束录音并生成纪要",
+			"Enter/Space", "结束录音并生成报告",
 			"Esc", "放弃录音",
 		))
 	} else if !m.stopping {
@@ -278,11 +261,9 @@ func (m RecordModel) View() string {
 	return lipgloss.NewStyle().Padding(4, 6).Render(b.String())
 }
 
-// generateAudioBar renders a 20-column audio level meter from the mic peak level.
-// generateMiniBar returns a compact RMS indicator for diagnostics.
 func generateMiniBar(rms float32) string {
 	bar := []rune(" ▁▂▃▄▅▆█")
-	level := int(rms * 7 * 20) // scale up for small RMS values
+	level := int(rms * 7 * 20)
 	if level < 0 {
 		level = 0
 	}
@@ -294,15 +275,11 @@ func generateMiniBar(rms float32) string {
 
 func generateAudioBar(peak float32) string {
 	bar := []rune("▁▂▃▄▅▆▇█")
-
-	// Use a logarithmic (dB-like) scale so quiet speech is visible.
-	// Map -48dB..0dB to bar level 0..7.
 	var level int
 	if peak < 0.0001 {
 		level = 0
 	} else {
-		db := 20.0 * math.Log10(float64(peak)) // e.g., -20dB for 0.1 peak
-		// Clamp to [-48, 0] dB, then scale to 0..7.
+		db := 20.0 * math.Log10(float64(peak))
 		scaled := (db + 48.0) / 48.0 * 7.0
 		level = int(scaled)
 		if level < 0 {
@@ -315,12 +292,11 @@ func generateAudioBar(peak float32) string {
 
 	var b strings.Builder
 	for i := 0; i < 20; i++ {
-		// Natural variation around the current level.
 		spread := level / 3
 		if spread < 1 && level > 0 {
 			spread = 1
 		}
-		offset := (i*7 + i*i%11) % (spread*2 + 1) - spread
+		offset := (i*7+i*i%11)%(spread*2+1) - spread
 		idx := level + offset
 		if idx < 0 {
 			idx = 0

@@ -3,8 +3,10 @@ package layout
 import "path/filepath"
 
 const (
-	LLMEngineDir        = "llmengine"
-	LLMModelsDir        = "llmmodels"
+	// Runtime dependency directories that live alongside the app during local use.
+	LLMEngineDir = "llmengine"
+	LLMModelsDir = "llmmodels"
+	// Packaged or runtime binaries should resolve these relative locations.
 	WhisperEngineRelDir = "llmengine/whispercpp/Release"
 	WhisperBinary       = "llmengine/whispercpp/Release/whisper-cli"
 	WhisperModel        = "./llmmodels/whisper/ggml-large-v3-turbo-q5_0.bin"

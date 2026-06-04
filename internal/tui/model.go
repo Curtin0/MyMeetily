@@ -12,7 +12,6 @@ import (
 	"github.com/mymeetily/mymeetily/internal/config"
 )
 
-// Screen represents the current view in the TUI.
 type Screen int
 
 const (
@@ -26,15 +25,14 @@ const (
 	ScreenResult
 )
 
-// Model is the top-level Bubble Tea model.
 type Model struct {
-	screen   Screen
-	width    int
-	height   int
-	cfg      *config.Config
-	quitting bool
+	screen         Screen
+	width          int
+	height         int
+	cfg            *config.Config
+	summaryEnabled bool
+	quitting       bool
 
-	// Sub-models
 	splash     SplashModel
 	menu       MenuModel
 	check      CheckModel
@@ -45,8 +43,7 @@ type Model struct {
 	result     ResultModel
 }
 
-// New creates a new top-level Model.
-func New(cfg *config.Config) Model {
+func New(cfg *config.Config, summaryEnabled bool) Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(Primary)
@@ -61,14 +58,15 @@ func New(cfg *config.Config) Model {
 	vp.Style = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(Muted)
 
 	return Model{
-		screen:     ScreenSplash,
-		cfg:        cfg,
-		splash:     NewSplashModel(),
-		menu:       NewMenuModel(),
-		check:      NewCheckModel(cfg),
-		micselect:  NewMicSelectModel(cfg.Audio.Backend),
-		record:     NewRecordModel(cfg.Output.OutputDir),
-		progress:   NewProgressModel(sp),
+		screen:         ScreenSplash,
+		cfg:            cfg,
+		summaryEnabled: summaryEnabled,
+		splash:         NewSplashModel(),
+		menu:           NewMenuModel(summaryEnabled),
+		check:          NewCheckModel(cfg),
+		micselect:      NewMicSelectModel(cfg.Audio.Backend),
+		record:         NewRecordModel(cfg.Output.OutputDir, summaryEnabled),
+		progress:       NewProgressModel(sp),
 		filepicker: FilePickerModel{
 			FilePicker: fp,
 			selected:   false,
@@ -79,12 +77,10 @@ func New(cfg *config.Config) Model {
 	}
 }
 
-// Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	return m.splash.Init()
 }
 
-// Update handles messages and delegates to sub-models.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -94,7 +90,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.Viewport.Width = msg.Width - 8
 		m.result.Viewport.Height = msg.Height - 10
 		return m, nil
-
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			m.quitting = true
@@ -102,7 +97,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Return to menu from any screen with 'esc'
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 		if m.screen != ScreenMenu && m.screen != ScreenMicSelect && m.screen != ScreenRecord && m.screen != ScreenSplash {
 			m.screen = ScreenMenu
@@ -132,7 +126,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the current screen.
 func (m Model) View() string {
 	if m.quitting {
 		return "Goodbye!\n"
@@ -159,15 +152,10 @@ func (m Model) View() string {
 	}
 
 	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height,
-			lipgloss.Center, lipgloss.Center,
-			content,
-		)
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 	}
 	return content
 }
-
-// --- Screen transition helpers ---
 
 func (m *Model) goToCheck() (tea.Model, tea.Cmd) {
 	m.screen = ScreenCheck
@@ -188,8 +176,7 @@ func (m *Model) goToMicSelect() (tea.Model, tea.Cmd) {
 
 func (m *Model) goToRecord(micDevice, speakerDevice string) (tea.Model, tea.Cmd) {
 	m.screen = ScreenRecord
-	m.record = NewRecordModel(m.cfg.Output.OutputDir)
-	// Create live transcriber for real-time subtitles during recording.
+	m.record = NewRecordModel(m.cfg.Output.OutputDir, m.summaryEnabled)
 	m.record.transcriber = audio.NewLiveTranscriber(audio.LiveTranscribeConfig{
 		WhisperBinary: m.cfg.ASR.WhisperBinary,
 		ModelPath:     m.cfg.ASR.ModelPath,

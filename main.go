@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	app "github.com/mymeetily/mymeetily/cmd/mymeetily"
+	app "github.com/mymeetily/mymeetily/cmd"
 )
 
 func main() {
