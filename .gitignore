@@ -9,13 +9,14 @@ llmmodels/ollama/
 llmmodels/summary/
 
 # Local whisper.cpp engine files downloaded by init-engine
-llmengine/whispercpp/Release/
+llmengine/whispercpp/Release/*
+!llmengine/whispercpp/Release/.gitkeep
 
 # Runtime cache
 .ollama-runtime/
 
 # Output
-output/
+/output/
 testdata/*.wav
 testdata/*.mp3
 testdata/*.txt

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyMeetily 技术选型与踩坑记录</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --card: #fff;
+    --text: #2d2d2d;
+    --muted: #888;
+    --border: #e5e5e5;
+    --tag-pass: #f0f4f0;
+    --tag-pass-text: #4a7c4f;
+    --tag-fail: #f4f0f0;
+    --tag-fail-text: #a05050;
+    --tag-pick: #eef0f4;
+    --tag-pick-text: #4a5c8a;
+    --code-bg: #f4f4f4;
+  }
+  * { margin:0; padding:0; box-sizing:border-box }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+    font-size: 15px;
+  }
+  .container { max-width: 820px; margin: 0 auto; padding: 48px 20px 80px }
+
+  h1 {
+    font-size: 24px; font-weight: 700; letter-spacing: .5px;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 40px }
+
+  .section { margin-bottom: 44px }
+  .section h2 {
+    font-size: 18px; font-weight: 600;
+    padding-bottom: 8px; margin-bottom: 14px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .requirement {
+    background: var(--code-bg); border-radius: 6px;
+    padding: 10px 16px; margin-bottom: 18px; font-size: 14px; color: #555;
+  }
+
+  .option {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 20px; margin-bottom: 12px;
+  }
+  .option-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .option-name { font-weight: 600 }
+  .tag {
+    font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 20px;
+    white-space: nowrap;
+  }
+  .tag-fail  { background: var(--tag-fail); color: var(--tag-fail-text) }
+  .tag-pass  { background: var(--tag-pass); color: var(--tag-pass-text) }
+  .tag-pick  { background: var(--tag-pick); color: var(--tag-pick-text) }
+  .option-desc { font-size: 14px; color: #555 }
+  .option-desc ul { padding-left: 18px; margin-top: 4px }
+  .option-desc li { margin-bottom: 2px }
+
+  .chosen { border-color: #999; background: #fdfdfd }
+
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+  }
+  th, td {
+    text-align: left; padding: 10px 14px; font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 500; font-size: 13px }
+  td:last-child { text-align: center; font-weight: 600 }
+
+  .principle {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;
+    font-size: 15px; color: #444; text-align: center;
+  }
+
+  footer {
+    margin-top: 48px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>MyMeetily 技术方案选型与踩坑记录</h1>
+<p class="subtitle">桌面端离线会议纪要工具&emsp;·&emsp;2026.06</p>
+
+<!-- ===== 一 ===== -->
+<div class="section">
+<h2>一、Ollama 部署方案</h2>
+<div class="requirement">
+  需求：本地 LLM 根据转写文本生成结构化中文纪要，不依赖云端 API，分发体积可控。
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 A — 内置 Ollama CPU 推理</span>
+    <span class="tag tag-fail">放弃</span>
+  </div>
+  <div class="option-desc">
+    将 Ollama CPU 运行时打包进项目。
+    <b>问题：</b>qwen2.5:1.5b 在无 GPU 机器上生成一份纪要需 30–60 秒，体验不可接受。
+  </div>
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 B — 内置 Ollama GPU 推理（CUDA）</span>
+    <span class="tag tag-fail">放弃</span>
+  </div>
+  <div class="option-desc">
+    同上但启用 GPU 加速。
+    <b>问题：</b>CUDA 运行时约 1.9GB，分发包臃肿，且 CUDA 版本与用户驱动兼容性难保证。
+  </div>
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 C — 手写 LLM Runtime</span>
+    <span class="tag tag-fail">放弃</span>
+  </div>
+  <div class="option-desc">
+    自实现 GGUF 加载 + llama.cpp backend。
+    <b>问题：</b>GPU 算子手写不现实，社区 Go binding 成熟度有限，维护成本太高。
+  </div>
+</div>
+
+<div class="option chosen">
+  <div class="option-header">
+    <span class="option-name">方案 D — 完全外包给 Ollama Setup 客户端</span>
+    <span class="tag tag-pick">最终采用</span>
+  </div>
+  <div class="option-desc">
+    <b>做法：</b>程序不内置 LLM 运行时，仅通过 HTTP API 调用户本机 Ollama 服务。
+    <ul>
+      <li>零额外体积 — Ollama 由用户决定是否启用 GPU，与本项目解耦</li>
+      <li>模型首次使用自动从 hf-mirror 下载 GGUF 并导入</li>
+      <li>用户可自行替换更强大的模型（如 qwen2.5:7b）</li>
+    </ul>
+    <b>代价：</b>用户需安装 Ollama（StartupCmd.txt 给出完整安装引导）。
+  </div>
+</div>
+</div>
+
+<!-- ===== 二 ===== -->
+<div class="section">
+<h2>二、语音识别引擎选择</h2>
+<div class="requirement">
+  需求：将录音 WAV 转为带时间戳的分段文本（Segments），支持中文，本地运行。
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 A — Fun-ASR-Nano-2512（PyTorch）</span>
+    <span class="tag tag-fail">放弃</span>
+  </div>
+  <div class="option-desc">
+    阿里达摩院中文 ASR 模型。准确率高，但依赖 PyTorch 运行时，
+    Python 环境管理对终端用户不友好，需 GPU 才能实时推演。
+  </div>
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 B — Fun-ASR via Docker</span>
+    <span class="tag tag-fail">放弃</span>
+  </div>
+  <div class="option-desc">
+    镜像约 16GB，需 WSL2，完全不适用于桌面分发。
+  </div>
+</div>
+
+<div class="option chosen">
+  <div class="option-header">
+    <span class="option-name">方案 C — whisper.cpp</span>
+    <span class="tag tag-pick">最终采用</span>
+  </div>
+  <div class="option-desc">
+    <b>做法：</b>whisper-cli.exe + GGUF 模型，Go 通过 os/exec 调用并解析 JSON。
+    <ul>
+      <li>单一可执行文件 + 单模型文件，q5_0 量化后仅 ~548MB</li>
+      <li>CPU 推理可用，GPU（CUDA 12.4）性能更强</li>
+      <li>init-engine 支持按需下载 cpu / blas / cuda-11.8 / cuda-12.4 四个变体</li>
+      <li>选用 ggml-large-v3-turbo-q5_0，中文识别准确率满足会议场景</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- ===== 三 ===== -->
+<div class="section">
+<h2>三、语音录制方案选择</h2>
+<div class="requirement">
+  需求：Windows 上同时录制麦克风 + 系统声音（捕获远程会议对方语音），输出文件供 ASR。
+</div>
+
+<div class="option">
+  <div class="option-header">
+    <span class="option-name">方案 A — ffmpeg + dshow 采集</span>
+    <span class="tag tag-fail">被替代</span>
+  </div>
+  <div class="option-desc">
+    <b>曾评估。</b>通过外部 ffmpeg 进程调用 DirectShow 采集音频并编码落盘，属于比较基础的 Windows 音频采集方案。
+    <ul>
+      <li>优点：实现简单直接，amix 滤镜可一步完成混音</li>
+      <li>痛点 ①：增加 ffmpeg 外部依赖</li>
+      <li>痛点 ②：dshow 设备枚举不如 WASAPI 完整，设备名与系统面板不一致</li>
+      <li>痛点 ③：系统音频采集需用户手动在控制面板启用"立体声混音"</li>
+      <li>痛点 ③：ffmpeg 进程生命周期管理引入额外复杂度</li>
+    </ul>
+  </div>
+</div>
+
+<div class="option chosen">
+  <div class="option-header">
+    <span class="option-name">方案 B — WASAPI 原生采集 + 纯 Go PCM 混音</span>
+    <span class="tag tag-pick">最终采用</span>
+  </div>
+  <div class="option-desc">
+    <b>做法：</b>go-wca 直接对接 WASAPI，麦克风和系统音频各自独立采集为临时 WAV，
+    停止后在 Go 内完成 int16 加法混音 + 钳位，输出 16-bit PCM WAV。
+    <ul>
+      <li>OBS、Bandicam、哔哩哔哩直播姬等成熟软件均采用 WASAPI，方案成熟可靠</li>
+      <li>零外部依赖 — 无需 ffmpeg、无需立体声混音</li>
+      <li>WASAPI 回环采集可直接捕获任意播放端点，用户无需配置</li>
+      <li>设备名与 Windows 声音设置面板一致，选择直观</li>
+    </ul>
+    <b>代价：</b>WAV 文件体积约 10MB/分钟（vs MP3 的 1MB/分钟），
+    但对会议录音场景影响可控。
+  </div>
+</div>
+</div>
+
+<!-- ===== 四 ===== -->
+<div class="section">
+<h2>四、Agent 流水线框架选择</h2>
+<div class="requirement">
+  需求：将"预处理 → 识别 → 总结 → 输出"串联为可复用的处理流水线。
+</div>
+
+<div class="option chosen">
+  <div class="option-header">
+    <span class="option-name">CloudWeGo Eino compose.Graph</span>
+    <span class="tag tag-pick">采用</span>
+  </div>
+  <div class="option-desc">
+    字节跳动 Go Agent 框架，以 Lambda Node + Edge 构建 DAG。当前仅线性四节点，
+    Eino 的能力有余量，但为后续扩展（多模型投票、人工修正节点）预留空间。
+    对比手写串行调用更利于长期维护。
+  </div>
+</div>
+</div>
+
+<!-- ===== 五 ===== -->
+<div class="section">
+<h2>五、总结</h2>
+
+<div class="principle">
+  核心原则：<b>同等能力下优先减少外部依赖数量</b>。
+  每少一个需用户手动安装的依赖，就少一个"我这为什么跑不起来"的支持问题。
+</div>
+
+<table>
+  <thead>
+    <tr><th>模块</th><th>最终方案</th><th>外部依赖</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>LLM 总结</td><td>Ollama HTTP API（用户自行安装）</td><td>1</td></tr>
+    <tr><td>语音识别</td><td>whisper.cpp（项目内嵌引擎 + 模型）</td><td>0</td></tr>
+    <tr><td>音频录制</td><td>WASAPI（Windows 原生 API，纯 Go）</td><td>0</td></tr>
+    <tr><td>Agent 框架</td><td>CloudWeGo Eino（Go Module）</td><td>0</td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top:16px; font-size:14px; color:var(--muted); text-align:center">
+  用户侧只需安装 <b>Ollama</b> 一个外部软件，其余全部由项目自包含。
+</p>
+</div>
+
+<footer>MyMeetily · 技术选型记录</footer>
+</div>
+</body>
+</html>
