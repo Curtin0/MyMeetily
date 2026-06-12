@@ -1,3 +1,9 @@
+  # 技术设计
+
+  Go 后端 + React 前端通过 Wails v2 IPC 桥接为 Windows 桌面应用，
+  WASAPI 双通道采集音频后经能量 VAD 实时切句送 whisper.cpp（large-v3-turbo Q5_0）离线转写，
+  再由 CloudWeGo Eino 图编排管线调用本地 Ollama（Qwen2.5-1.5B-Instruct Q4_K_M）生成结构化中文会议纪要。
+  
   # 首次部署清单
 
   # 1) 手动下载安装并启动 Ollama：
@@ -19,4 +25,4 @@
   #    go run . init-model
 
   # 6) 运行指令启动程序：
-  #    go run .
+  #    wails dev

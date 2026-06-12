@@ -1,12 +1,22 @@
-.PHONY: build test lint run clean download-model package
+.PHONY: build test lint run dev clean download-model package
 
 BINARY := mymeetily.exe
+WAILS_BINARY := build/bin/mymeetily.exe
 MODEL_URL := https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
 MODEL_DIR := llmmodels/whisper
 MODEL_FILE := $(MODEL_DIR)/ggml-large-v3-turbo-q5_0.bin
 DIST_DIR := dist/mymeetily
 
+# Wails GUI build
 build:
+	wails build
+
+# Dev mode (hot-reload frontend)
+dev:
+	wails dev
+
+# Go-only build (CLI tools)
+build-cli:
 	go build -ldflags="-s -w" -o $(BINARY) .
 
 test:
@@ -29,7 +39,7 @@ package: build
 	@mkdir -p $(DIST_DIR)/output
 	@mkdir -p $(DIST_DIR)/configs
 	@mkdir -p $(DIST_DIR)/llmengine/whispercpp/Release
-	@cp $(BINARY) $(DIST_DIR)/
+	@cp $(WAILS_BINARY) $(DIST_DIR)/mymeetily.exe 2>/dev/null || cp $(BINARY) $(DIST_DIR)/
 	@cp configs/config.yaml $(DIST_DIR)/configs/
 	@cp llmengine/whispercpp/Release/whisper-cli.exe $(DIST_DIR)/llmengine/whispercpp/Release/ 2>/dev/null || echo "  ⚠ whisper-cli.exe 未找到"
 	@cp llmengine/whispercpp/Release/whisper.dll $(DIST_DIR)/llmengine/whispercpp/Release/ 2>/dev/null || true
@@ -40,7 +50,7 @@ package: build
 	@cp start.bat $(DIST_DIR)/ 2>/dev/null || true
 	@echo ""
 	@echo "分发包: $(DIST_DIR)/"
-	@ls -lh $(DIST_DIR)/*.exe
+	@ls -lh $(DIST_DIR)/*.exe 2>/dev/null || true
 	@echo ""
 	@rm -f dist/mymeetily/llmmodels/whisper/*.bin dist/mymeetily/output/*
 	@cd dist && tar -czf mymeetily.tar.gz --exclude="llmmodels/whisper/*.bin" --exclude="output/*" -C mymeetily .
@@ -50,3 +60,4 @@ clean:
 	rm -f $(BINARY) mymeetily mymeetily.exe
 	rm -rf output/
 	rm -rf dist/
+	rm -rf build/
